@@ -19,6 +19,7 @@ import org.testcontainers.shaded.org.checkerframework.checker.units.qual.A;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -465,5 +466,87 @@ class PlayerServiceTest extends PersistentTestBase {
 
         assertFalse(result.isPresent());
     }
+    @Test
+    void testPagination_ValidPageAndSize() {
+        // Setup data: Create 10 players
+        List<Player> players = IntStream.range(1, 11)
+                .mapToObj(i -> persistAndReturnEntity(
+                        Player.builder()
+                                .name("Player " + i)
+                                .email("player" + i + "@example.com")
+                                .build()))
+                .toList();
+
+        // Fetch page 0 with a size of 5
+        Player[] paginatedPlayers = playerService.pagination(0, 5);
+
+        assertEquals(5, paginatedPlayers.length);
+        assertEquals(players.get(0).getId(), paginatedPlayers[0].getId()); // First player on page 0
+        assertEquals(players.get(4).getId(), paginatedPlayers[4].getId()); // Last player on page 0
+    }
+
+    @Test
+    void testPagination_PageSizeLargerThanTotalPlayers() {
+        // Setup data: Create 5 players
+        List<Player> players = IntStream.range(1, 6)
+                .mapToObj(i -> persistAndReturnEntity(
+                        Player.builder()
+                                .name("Player " + i)
+                                .email("player" + i + "@example.com")
+                                .build()))
+                .toList();
+
+        // Fetch page 0 with a size of 10
+        Player[] paginatedPlayers = playerService.pagination(0, 10);
+
+        assertEquals(players.size(), paginatedPlayers.length);
+        assertEquals(players.get(0).getId(), paginatedPlayers[0].getId()); // First player
+        assertEquals(players.get(4).getId(), paginatedPlayers[4].getId()); // Last player
+    }
+
+    @Test
+    void testPagination_NoPlayers() {
+        // Fetch page 0 with a size of 5 when there are no players
+        Player[] paginatedPlayers = playerService.pagination(0, 5);
+
+        assertEquals(0, paginatedPlayers.length);
+    }
+
+    @Test
+    void testPagination_InvalidPageOrSize() {
+        // Test invalid page size
+        IllegalArgumentException exceptionForInvalidSize = assertThrows(
+                IllegalArgumentException.class,
+                () -> playerService.pagination(0, 0)
+        );
+        assertEquals("Page size must be greater than 0", exceptionForInvalidSize.getMessage());
+
+        // Test invalid page number
+        IllegalArgumentException exceptionForInvalidPage = assertThrows(
+                IllegalArgumentException.class,
+                () -> playerService.pagination(-1, 5)
+        );
+        assertEquals("Page index must be zero or greater", exceptionForInvalidPage.getMessage());
+    }
+
+    @Test
+    void testPagination_SpecificRange() {
+        // Setup data: Create 100 players
+        List<Player> players = IntStream.range(1, 101)
+                .mapToObj(i -> persistAndReturnEntity(
+                        Player.builder()
+                                .name("Player " + i)
+                                .email("player" + i + "@example.com")
+                                .build()))
+                .toList();
+
+        // Fetch players 50–59 (page index 5, size 10)
+        Player[] paginatedPlayers = playerService.pagination(5, 10);
+
+        assertEquals(10, paginatedPlayers.length);
+        assertEquals(players.get(50).getId(), paginatedPlayers[0].getId()); // First player on page 5
+        assertEquals(players.get(59).getId(), paginatedPlayers[9].getId()); // Last player on page 5
+    }
+
 
 }
